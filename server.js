@@ -70,18 +70,25 @@ app.get('/api/settings', async (req, res) => {
 // Update settings
 app.post('/api/settings', async (req, res) => {
   try {
-    const { channel_name, channel_description, view_probability, reaction_probability, reply_probability, simulation_speed } = req.body;
+    const {
+      channel_name, channel_description, member_count,
+      simulation_speed, min_views, min_reactions,
+      reaction_delay, randomness, available_emojis
+    } = req.body;
 
     const updates = {};
     if (channel_name !== undefined) updates.channel_name = channel_name;
     if (channel_description !== undefined) updates.channel_description = channel_description;
-    if (view_probability !== undefined) updates.view_probability = view_probability;
-    if (reaction_probability !== undefined) updates.reaction_probability = reaction_probability;
-    if (reply_probability !== undefined) updates.reply_probability = reply_probability;
+    if (member_count !== undefined) updates.member_count = member_count;
     if (simulation_speed !== undefined) {
       updates.simulation_speed = simulation_speed;
       simulator.setSimulationSpeed(simulation_speed);
     }
+    if (min_views !== undefined) updates.min_views = min_views;
+    if (min_reactions !== undefined) updates.min_reactions = min_reactions;
+    if (reaction_delay !== undefined) updates.reaction_delay = reaction_delay;
+    if (randomness !== undefined) updates.randomness = randomness;
+    if (available_emojis !== undefined) updates.available_emojis = available_emojis;
 
     await simulator.updateSettings(updates);
     res.json({ success: true });
@@ -105,26 +112,12 @@ app.post('/api/posts', async (req, res) => {
       [1, text, imageUrl || null, new Date().toISOString(), new Date().toISOString()]
     );
 
-    // Initialize reaction counts for this post
-    const reactionTypes = ['❤️', '👍', '😂', '🔥', '😢', '😡'];
-    for (const reactionType of reactionTypes) {
-      await dbRun(
-        'INSERT INTO reactions (post_id, reaction_type, count, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-        [result.id, reactionType, 0, new Date().toISOString(), new Date().toISOString()]
-      );
-    }
+    // Initialize post engagement with realistic numbers
+    await simulator.initializePostEngagement(result.id);
 
-    // Initialize reply count
-    await dbRun(
-      'INSERT INTO reply_counts (post_id, reply_count, updated_at) VALUES (?, ?, ?)',
-      [result.id, 0, new Date().toISOString()]
-    );
-
-    // Trigger immediate simulation for the new post
-    if (simulator.isSimulationRunning()) {
-      await simulator.simulatePostViews(result.id);
-      await simulator.simulateReactions(result.id);
-      await simulator.simulateReplies(result.id);
+    // Start simulation if not already running
+    if (!simulator.isSimulationRunning()) {
+      await simulator.startSimulation();
     }
 
     res.json({ success: true, postId: result.id });
@@ -191,15 +184,35 @@ app.get('/api/posts/:id', async (req, res) => {
     }
 
     const reactions = await dbAll(
-      'SELECT reaction_type, count FROM reactions WHERE post_id = ? AND count > 0 ORDER BY count DESC',
+      'SELECT reaction_type, count FROM reactions WHERE post_id = ? ORDER BY count DESC',
       [id]
     );
 
+    const engagementStatus = await simulator.getPostEngagementStatus(id);
+
     post.reactions = reactions;
+    post.engagement = engagementStatus;
 
     res.json(post);
   } catch (err) {
     console.error('Error fetching post:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get post engagement status
+app.get('/api/posts/:id/engagement', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = await simulator.getPostEngagementStatus(id);
+
+    if (!status) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    res.json(status);
+  } catch (err) {
+    console.error('Error fetching engagement status:', err);
     res.status(500).json({ error: err.message });
   }
 });

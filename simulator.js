@@ -3,6 +3,7 @@ const { dbRun, dbAll, dbGet } = require('./database');
 let simulationRunning = false;
 let simulationSpeed = 1;
 let simulationInterval = null;
+const activeEngagements = new Map(); // Track active post engagements
 
 async function getSettings() {
   const settings = await dbGet('SELECT * FROM settings WHERE id = 1');
@@ -15,186 +16,250 @@ async function updateSettings(updates) {
   await dbRun(`UPDATE settings SET ${setClause} WHERE id = 1`, values);
 }
 
-async function getRandomMembers(count) {
-  const members = await dbAll(
-    `SELECT * FROM members ORDER BY RANDOM() LIMIT ?`,
-    [count]
-  );
-  return members;
+function seededRandom(seed) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
 }
 
-async function simulatePostViews(postId) {
-  const settings = await getSettings();
-  const post = await dbGet('SELECT * FROM posts WHERE id = ?', [postId]);
+// Engagement curve based on time elapsed (in seconds)
+function getEngagementProgress(secondsElapsed, totalViewsTarget) {
+  // 0-10: 0% (waiting period before engagement)
+  if (secondsElapsed < 10) return 0;
 
-  if (!post) return;
-
-  // Get all members
-  const members = await dbAll('SELECT * FROM members');
-
-  // Simulate views
-  let newViews = 0;
-  for (const member of members) {
-    const randomValue = Math.random();
-    const viewProb = member.view_probability || settings.view_probability;
-
-    if (randomValue < viewProb) {
-      newViews++;
-    }
+  // 10-30: 10-25% (slow start)
+  if (secondsElapsed < 30) {
+    return 0.1 + (0.15 * (secondsElapsed - 10) / 20);
   }
 
-  // Update view count
-  const totalViews = (post.views || 0) + newViews;
-  await dbRun('UPDATE posts SET views = ? WHERE id = ?', [totalViews, postId]);
+  // 30-120 (2 min): 25-75% (rapid growth)
+  if (secondsElapsed < 120) {
+    return 0.25 + (0.5 * (secondsElapsed - 30) / 90);
+  }
 
-  return newViews;
+  // 120-600 (10 min): 75-95% (peak activity)
+  if (secondsElapsed < 600) {
+    return 0.75 + (0.2 * (secondsElapsed - 120) / 480);
+  }
+
+  // 600-1800 (30 min): 95-99% (slowing)
+  if (secondsElapsed < 1800) {
+    return 0.95 + (0.04 * (secondsElapsed - 600) / 1200);
+  }
+
+  // 1800+: 99-100% (minimal increase)
+  return Math.min(0.999, 0.99 + (0.009 * Math.min((secondsElapsed - 1800) / 3600, 1)));
 }
 
-async function simulateReactions(postId) {
-  const settings = await getSettings();
-  const reactionTypes = ['❤️', '👍', '😂', '🔥', '😢', '😡'];
+// Generate engagement for a post
+async function initializePostEngagement(postId) {
+  try {
+    const settings = await getSettings();
+    const post = await dbGet('SELECT * FROM posts WHERE id = ?', [postId]);
 
-  const post = await dbGet('SELECT * FROM posts WHERE id = ?', [postId]);
-  if (!post) return;
+    if (!post) return;
 
-  // Get all members
-  const members = await dbAll('SELECT * FROM members');
+    // Check if already initialized
+    const existing = await dbGet('SELECT * FROM post_engagement WHERE post_id = ?', [postId]);
+    if (existing) return;
 
-  // Simulate reactions
-  const reactionCounts = {};
-  reactionTypes.forEach(type => {
-    reactionCounts[type] = 0;
-  });
+    const members = await dbAll('SELECT * FROM members LIMIT ?', [settings.member_count || 24388]);
+    const now = new Date().toISOString();
 
-  for (const member of members) {
-    const randomValue = Math.random();
-    const reactionProb = member.reaction_probability || settings.reaction_probability;
+    // Calculate target views and reactions with randomness
+    const viewRand = 0.7 + Math.random() * (settings.randomness || 0.5);
+    const reactRand = 0.6 + Math.random() * (settings.randomness || 0.5);
 
-    if (randomValue < reactionProb) {
-      const randomReaction = reactionTypes[Math.floor(Math.random() * reactionTypes.length)];
-      reactionCounts[randomReaction]++;
-    }
-  }
+    const targetViews = Math.floor((settings.min_views || 12483) * viewRand);
+    const targetReactions = Math.floor((settings.min_reactions || 8234) * reactRand);
 
-  // Update or create reactions
-  for (const [reactionType, count] of Object.entries(reactionCounts)) {
-    if (count > 0) {
-      const existing = await dbGet(
-        'SELECT * FROM reactions WHERE post_id = ? AND reaction_type = ?',
-        [postId, reactionType]
-      );
+    // Select random emojis from available
+    const availableEmojis = (settings.available_emojis || '❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣').split(',');
+    const numEmojis = 4 + Math.floor(Math.random() * 8); // 4-11 emojis per post
+    const selectedEmojis = [];
 
-      if (existing) {
-        await dbRun(
-          'UPDATE reactions SET count = ?, updated_at = ? WHERE post_id = ? AND reaction_type = ?',
-          [existing.count + count, new Date().toISOString(), postId, reactionType]
-        );
-      } else {
-        await dbRun(
-          'INSERT INTO reactions (post_id, reaction_type, count, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-          [postId, reactionType, count, new Date().toISOString(), new Date().toISOString()]
-        );
+    for (let i = 0; i < numEmojis; i++) {
+      const emoji = availableEmojis[Math.floor(Math.random() * availableEmojis.length)];
+      if (!selectedEmojis.includes(emoji)) {
+        selectedEmojis.push(emoji);
       }
     }
-  }
 
-  return reactionCounts;
-}
+    // Generate realistic emoji distribution (not equal)
+    const distribution = {};
+    selectedEmojis.forEach(emoji => {
+      distribution[emoji] = 0;
+    });
 
-async function simulateReplies(postId) {
-  const settings = await getSettings();
-  const post = await dbGet('SELECT * FROM posts WHERE id = ?', [postId]);
+    // Assign reactions unevenly to emojis
+    let remaining = targetReactions;
+    selectedEmojis.forEach((emoji, idx) => {
+      if (idx === 0) {
+        // First emoji gets biggest share
+        distribution[emoji] = Math.floor(targetReactions * (0.3 + Math.random() * 0.3));
+      } else if (idx === selectedEmojis.length - 1) {
+        // Last emoji gets remaining
+        distribution[emoji] = remaining;
+      } else {
+        // Middle emojis get varying shares
+        const share = Math.floor(remaining * (0.3 + Math.random() * 0.4));
+        distribution[emoji] = share;
+        remaining -= share;
+      }
+    });
 
-  if (!post) return;
+    // Store engagement plan
+    await dbRun(
+      `INSERT INTO post_engagement (post_id, created_at, engagement_started_at, target_views, target_reactions, selected_emojis, emoji_distribution, last_updated)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`,
+      [postId, now, targetViews, targetReactions, selectedEmojis.join(','), JSON.stringify(distribution), now]
+    );
 
-  // Get all members
-  const members = await dbAll('SELECT * FROM members');
-
-  // Simulate replies
-  let newReplies = 0;
-  for (const member of members) {
-    const randomValue = Math.random();
-    const replyProb = member.reply_probability || settings.reply_probability;
-
-    if (randomValue < replyProb) {
-      newReplies++;
+    // Initialize all reactions with 0 count
+    for (const emoji of selectedEmojis) {
+      await dbRun(
+        `INSERT INTO reactions (post_id, reaction_type, count, created_at, updated_at)
+         VALUES (?, ?, 0, ?, ?)`,
+        [postId, emoji, now, now]
+      );
     }
+
+    console.log(`📊 Post ${postId} engagement initialized: ${targetViews} views, ${targetReactions} reactions across ${selectedEmojis.length} emojis`);
+  } catch (err) {
+    console.error('Error initializing post engagement:', err);
   }
-
-  // Update or create reply count
-  const existing = await dbGet('SELECT * FROM reply_counts WHERE post_id = ?', [postId]);
-
-  if (existing) {
-    await dbRun(
-      'UPDATE reply_counts SET reply_count = ?, updated_at = ? WHERE post_id = ?',
-      [existing.reply_count + newReplies, new Date().toISOString(), postId]
-    );
-  } else {
-    await dbRun(
-      'INSERT INTO reply_counts (post_id, reply_count, updated_at) VALUES (?, ?, ?)',
-      [postId, newReplies, new Date().toISOString()]
-    );
-  }
-
-  return newReplies;
 }
 
-async function updateOnlineStatus() {
-  // Randomly set members as online/offline
-  const members = await dbAll('SELECT id FROM members');
+// Update post engagement progressively
+async function updatePostEngagement(postId) {
+  try {
+    const engagement = await dbGet('SELECT * FROM post_engagement WHERE post_id = ?', [postId]);
+    if (!engagement || !engagement.is_active) return;
 
-  for (const member of members) {
-    const isOnline = Math.random() < 0.3; // 30% chance of being online
-    await dbRun('UPDATE members SET is_online = ?, last_seen = ? WHERE id = ?',
-      [isOnline ? 1 : 0, new Date().toISOString(), member.id]);
+    const createdAt = new Date(engagement.created_at).getTime();
+    const now = new Date().getTime();
+    const secondsElapsed = (now - createdAt) / 1000;
+
+    // If engagement hasn't started yet, check if we've passed the delay
+    if (!engagement.engagement_started_at) {
+      if (secondsElapsed >= (await getSettings()).reaction_delay || 10) {
+        await dbRun(
+          'UPDATE post_engagement SET engagement_started_at = ? WHERE post_id = ?',
+          [new Date().toISOString(), postId]
+        );
+      } else {
+        return; // Still in delay period
+      }
+    }
+
+    // Calculate progress
+    const engagementStarted = new Date(engagement.engagement_started_at).getTime();
+    const engagementSecondsElapsed = (now - engagementStarted) / 1000;
+
+    const progress = getEngagementProgress(engagementSecondsElapsed, engagement.target_views);
+
+    // Calculate current stats
+    const currentViews = Math.floor(engagement.target_views * progress);
+    const currentTotalReactions = Math.floor(engagement.target_reactions * progress);
+
+    // Update post views
+    await dbRun('UPDATE posts SET views = ? WHERE id = ?', [currentViews, postId]);
+
+    // Distribute reactions
+    const distribution = JSON.parse(engagement.emoji_distribution);
+    const emojis = engagement.selected_emojis.split(',');
+
+    for (const emoji of emojis) {
+      const targetCount = distribution[emoji];
+      const currentCount = Math.floor(targetCount * progress);
+
+      await dbRun(
+        'UPDATE reactions SET count = ?, updated_at = ? WHERE post_id = ? AND reaction_type = ?',
+        [currentCount, new Date().toISOString(), postId, emoji]
+      );
+    }
+
+    // Mark as inactive if fully completed
+    if (progress >= 0.99) {
+      await dbRun('UPDATE post_engagement SET is_active = 0 WHERE post_id = ?', [postId]);
+    }
+  } catch (err) {
+    console.error('Error updating post engagement:', err);
   }
-
-  const onlineCount = await dbGet('SELECT COUNT(*) as count FROM members WHERE is_online = 1');
-  return onlineCount.count;
 }
 
-async function recordStats() {
-  const onlineMembers = await dbGet('SELECT COUNT(*) as count FROM members WHERE is_online = 1');
-  const totalViews = await dbGet('SELECT COALESCE(SUM(views), 0) as total FROM posts');
-  const totalReactions = await dbGet('SELECT COALESCE(SUM(count), 0) as total FROM reactions');
+// Get post engagement status
+async function getPostEngagementStatus(postId) {
+  try {
+    const engagement = await dbGet('SELECT * FROM post_engagement WHERE post_id = ?', [postId]);
+    if (!engagement) return null;
 
-  // Count new members (joined in last 24 hours)
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const newMembers = await dbGet('SELECT COUNT(*) as count FROM members WHERE join_date > ?', [yesterday]);
+    const createdAt = new Date(engagement.created_at).getTime();
+    const now = new Date().getTime();
+    const secondsElapsed = (now - createdAt) / 1000;
 
-  await dbRun(
-    'INSERT INTO stats (timestamp, online_count, new_members, total_views, total_reactions) VALUES (?, ?, ?, ?, ?)',
-    [new Date().toISOString(), onlineMembers.count, newMembers.count, totalViews.total, totalReactions.total]
-  );
+    const reactionDelay = (await getSettings()).reaction_delay || 10;
 
-  return {
-    onlineCount: onlineMembers.count,
-    newMembers: newMembers.count,
-    totalViews: totalViews.total,
-    totalReactions: totalReactions.total
-  };
+    if (secondsElapsed < reactionDelay) {
+      return {
+        status: 'waiting',
+        secondsUntilStart: Math.max(0, reactionDelay - secondsElapsed),
+        targetViews: engagement.target_views,
+        targetReactions: engagement.target_reactions
+      };
+    }
+
+    if (!engagement.engagement_started_at) {
+      return {
+        status: 'starting',
+        targetViews: engagement.target_views,
+        targetReactions: engagement.target_reactions
+      };
+    }
+
+    const engagementStarted = new Date(engagement.engagement_started_at).getTime();
+    const engagementSecondsElapsed = (now - engagementStarted) / 1000;
+    const progress = getEngagementProgress(engagementSecondsElapsed, engagement.target_views);
+
+    return {
+      status: engagement.is_active ? 'active' : 'completed',
+      secondsElapsed: Math.floor(engagementSecondsElapsed),
+      progress: Math.round(progress * 100),
+      targetViews: engagement.target_views,
+      targetReactions: engagement.target_reactions,
+      selectedEmojis: engagement.selected_emojis.split(',')
+    };
+  } catch (err) {
+    console.error('Error getting engagement status:', err);
+    return null;
+  }
 }
 
 async function runSimulationCycle() {
   try {
-    // Get all posts
-    const posts = await dbAll('SELECT id FROM posts ORDER BY created_at DESC LIMIT 10');
+    // Get all posts that need engagement updates
+    const posts = await dbAll('SELECT id FROM posts WHERE id IN (SELECT post_id FROM post_engagement WHERE is_active = 1)');
 
-    // Simulate activity on each post
     for (const post of posts) {
-      await simulatePostViews(post.id);
-      await simulateReactions(post.id);
-      await simulateReplies(post.id);
+      await updatePostEngagement(post.id);
     }
 
     // Update online status
     await updateOnlineStatus();
-
-    // Record stats
-    await recordStats();
-
   } catch (err) {
     console.error('Error in simulation cycle:', err);
+  }
+}
+
+async function updateOnlineStatus() {
+  try {
+    const members = await dbAll('SELECT id FROM members LIMIT 100'); // Sample for efficiency
+
+    for (const member of members) {
+      const isOnline = Math.random() < 0.3;
+      await dbRun('UPDATE members SET is_online = ? WHERE id = ?', [isOnline ? 1 : 0, member.id]);
+    }
+  } catch (err) {
+    console.error('Error updating online status:', err);
   }
 }
 
@@ -207,9 +272,9 @@ async function startSimulation() {
   simulationRunning = true;
   console.log('🚀 Simulation started');
 
-  // Run simulation cycle every 2 seconds, scaled by speed
-  const baseInterval = 2000;
-  const interval = baseInterval / simulationSpeed;
+  const baseInterval = 1000; // Update every 1 second
+  const settings = await getSettings();
+  const interval = baseInterval / (settings.simulation_speed || 1);
 
   simulationInterval = setInterval(() => {
     runSimulationCycle();
@@ -234,7 +299,6 @@ function setSimulationSpeed(speed) {
   simulationSpeed = speed;
 
   if (simulationRunning) {
-    // Restart with new speed
     stopSimulation();
     startSimulation();
   }
@@ -247,23 +311,18 @@ function isSimulationRunning() {
 async function resetSimulation() {
   console.log('🔄 Resetting simulation...');
 
-  // Stop simulation if running
   if (simulationRunning) {
     await stopSimulation();
   }
 
-  // Clear data
   await dbRun('DELETE FROM posts');
   await dbRun('DELETE FROM reactions');
   await dbRun('DELETE FROM reply_counts');
   await dbRun('DELETE FROM stats');
-  await dbRun('DELETE FROM members');
+  await dbRun('DELETE FROM post_engagement');
+  await dbRun('UPDATE members SET is_online = 0');
 
-  // Reseed members
-  const { seedMembers } = require('./seed');
-  // Can't easily require seed since it's a standalone script
-  // Instead, just clear and let frontend reseed
-  console.log('✅ Simulation reset. Please reseed members from frontend.');
+  console.log('✅ Simulation reset');
 }
 
 module.exports = {
@@ -272,12 +331,9 @@ module.exports = {
   setSimulationSpeed,
   isSimulationRunning,
   resetSimulation,
-  simulatePostViews,
-  simulateReactions,
-  simulateReplies,
-  updateOnlineStatus,
-  recordStats,
+  initializePostEngagement,
+  updatePostEngagement,
+  getPostEngagementStatus,
   getSettings,
-  updateSettings,
-  getRandomMembers
+  updateSettings
 };

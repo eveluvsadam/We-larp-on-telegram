@@ -178,21 +178,40 @@
           </div>
 
           <div class="settings-section">
-            <h3>Simulation Parameters</h3>
+            <h3>Engagement Parameters</h3>
             <div class="form-group">
-              <label>View Probability</label>
-              <input type="range" id="viewProb" min="0" max="1" step="0.05" value="0.45">
-              <span id="viewProbValue">0.45</span>
+              <label>Minimum Post Views</label>
+              <input type="number" id="minViews" min="100" max="100000" step="1000" value="12483">
             </div>
             <div class="form-group">
-              <label>Reaction Probability</label>
-              <input type="range" id="reactionProb" min="0" max="1" step="0.05" value="0.25">
-              <span id="reactionProbValue">0.25</span>
+              <label>Minimum Post Reactions</label>
+              <input type="number" id="minReactions" min="100" max="100000" step="1000" value="8234">
             </div>
             <div class="form-group">
-              <label>Reply Probability</label>
-              <input type="range" id="replyProb" min="0" max="1" step="0.05" value="0.08">
-              <span id="replyProbValue">0.08</span>
+              <label>Reaction Delay (seconds)</label>
+              <input type="number" id="reactionDelay" min="5" max="60" value="10">
+            </div>
+            <div class="form-group">
+              <label>Engagement Randomness</label>
+              <input type="range" id="randomness" min="0" max="1" step="0.1" value="0.5">
+              <span id="randomnessValue">0.5</span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Simulation Speed</h3>
+            <div class="form-group">
+              <label>Simulation Speed Multiplier</label>
+              <input type="range" id="simSpeed" min="0.1" max="5" step="0.1" value="1">
+              <span id="simSpeedValue">1.0x</span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Reaction Emojis</h3>
+            <div class="form-group">
+              <label>Available Emojis (comma-separated)</label>
+              <textarea id="availableEmojis" placeholder="❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣"></textarea>
             </div>
           </div>
 
@@ -200,7 +219,7 @@
             <h3>Member Management</h3>
             <div class="form-group">
               <label>Number of Members</label>
-              <input type="number" id="memberCountInput" min="100" max="100000" step="1000" value="20000">
+              <input type="number" id="memberCountInput" min="100" max="100000" step="1000" value="24388">
             </div>
             <button class="btn btn-primary" id="reseedBtn">🌱 Reseed Members</button>
             <div id="reseedStatus"></div>

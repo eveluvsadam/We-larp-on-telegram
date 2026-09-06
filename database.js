@@ -24,11 +24,16 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY,
       channel_name TEXT DEFAULT 'premmo''s cave',
       channel_description TEXT DEFAULT 'A local community simulator',
-      member_count INTEGER DEFAULT 20000,
+      member_count INTEGER DEFAULT 24388,
       view_probability REAL DEFAULT 0.45,
       reaction_probability REAL DEFAULT 0.25,
       reply_probability REAL DEFAULT 0.08,
-      simulation_speed INTEGER DEFAULT 1
+      simulation_speed REAL DEFAULT 1.0,
+      min_views INTEGER DEFAULT 12483,
+      min_reactions INTEGER DEFAULT 8234,
+      reaction_delay INTEGER DEFAULT 10,
+      randomness REAL DEFAULT 0.5,
+      available_emojis TEXT DEFAULT '❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣'
     )
   `);
 
@@ -104,6 +109,23 @@ db.serialize(() => {
       new_members INTEGER,
       total_views INTEGER,
       total_reactions INTEGER
+    )
+  `);
+
+  // Post engagement tracking
+  db.run(`
+    CREATE TABLE IF NOT EXISTS post_engagement (
+      id INTEGER PRIMARY KEY,
+      post_id INTEGER UNIQUE,
+      created_at TEXT,
+      engagement_started_at TEXT,
+      target_views INTEGER,
+      target_reactions INTEGER,
+      selected_emojis TEXT,
+      emoji_distribution TEXT,
+      is_active INTEGER DEFAULT 1,
+      last_updated TEXT,
+      FOREIGN KEY(post_id) REFERENCES posts(id)
     )
   `);
 });

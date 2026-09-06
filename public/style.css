@@ -357,6 +357,43 @@ body {
   gap: 1.5rem;
 }
 
+.engagement-status {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.engagement-status.waiting {
+  background: rgba(245, 166, 35, 0.15);
+  color: #f5a623;
+  border: 1px solid #f5a623;
+}
+
+.engagement-status.active {
+  background: rgba(49, 162, 76, 0.15);
+  color: #31a24c;
+  border: 1px solid #31a24c;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.engagement-status.starting {
+  background: rgba(0, 136, 204, 0.15);
+  color: #0088cc;
+  border: 1px solid #0088cc;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .post-card {
   background: var(--dark-surface);
   border: 1px solid var(--dark-border);

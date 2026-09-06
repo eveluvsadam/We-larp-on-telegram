@@ -1,6 +1,7 @@
 // Global State
 let currentPage = 'dashboard';
 let statsInterval = null;
+let postEngagementTimers = new Map();
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -149,7 +150,7 @@ function drawActivityChart(data) {
   const svg = document.getElementById('activityChart');
   if (!svg) return;
 
-  svg.innerHTML = ''; // Clear previous
+  svg.innerHTML = '';
 
   const width = 1000;
   const height = 300;
@@ -157,18 +158,16 @@ function drawActivityChart(data) {
   const graphWidth = width - padding * 2;
   const graphHeight = height - padding * 2;
 
-  // Find min and max values
   const onlineCounts = data.map(d => d.online_count);
   const maxOnline = Math.max(...onlineCounts, 1);
 
-  // Create background
   const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   bg.setAttribute('width', width);
   bg.setAttribute('height', height);
   bg.setAttribute('fill', 'transparent');
   svg.appendChild(bg);
 
-  // Draw grid lines
+  // Grid lines
   for (let i = 0; i <= 5; i++) {
     const y = padding + (graphHeight / 5) * i;
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -180,7 +179,6 @@ function drawActivityChart(data) {
     line.setAttribute('stroke-width', '1');
     svg.appendChild(line);
 
-    // Add labels
     const value = Math.round((maxOnline / 5) * (5 - i));
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', padding - 10);
@@ -192,7 +190,7 @@ function drawActivityChart(data) {
     svg.appendChild(text);
   }
 
-  // Draw data line
+  // Data line
   const points = data.map((d, i) => {
     const x = padding + (i / (data.length - 1 || 1)) * graphWidth;
     const y = padding + graphHeight - (d.online_count / maxOnline) * graphHeight;
@@ -204,30 +202,15 @@ function drawActivityChart(data) {
   polyline.setAttribute('fill', 'none');
   polyline.setAttribute('stroke', '#0088cc');
   polyline.setAttribute('stroke-width', '2');
-  polyline.setAttribute('stroke-linejoin', 'round');
   svg.appendChild(polyline);
 
-  // Draw points
-  data.forEach((d, i) => {
-    const x = padding + (i / (data.length - 1 || 1)) * graphWidth;
-    const y = padding + graphHeight - (d.online_count / maxOnline) * graphHeight;
-
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', x);
-    circle.setAttribute('cy', y);
-    circle.setAttribute('r', '4');
-    circle.setAttribute('fill', '#31a24c');
-    svg.appendChild(circle);
-  });
-
-  // Draw axes
+  // Axes
   const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   xAxis.setAttribute('x1', padding);
   xAxis.setAttribute('x2', width - padding);
   xAxis.setAttribute('y1', height - padding);
   xAxis.setAttribute('y2', height - padding);
   xAxis.setAttribute('stroke', '#2d2d2d');
-  xAxis.setAttribute('stroke-width', '1');
   svg.appendChild(xAxis);
 
   const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -236,7 +219,6 @@ function drawActivityChart(data) {
   yAxis.setAttribute('y1', padding);
   yAxis.setAttribute('y2', height - padding);
   yAxis.setAttribute('stroke', '#2d2d2d');
-  yAxis.setAttribute('stroke-width', '1');
   svg.appendChild(yAxis);
 }
 
@@ -276,7 +258,7 @@ async function createPost() {
       document.getElementById('postImage').value = '';
       document.getElementById('postFormContainer').style.display = 'none';
       loadPosts();
-      alert('Post created! Watch it gain simulated engagement.');
+      alert('Post created! Watch engagement increase over time.');
     }
   } catch (err) {
     console.error('Error creating post:', err);
@@ -293,7 +275,7 @@ async function loadPosts(page = 0) {
     postsList.innerHTML = '';
 
     if (data.posts.length === 0) {
-      postsList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #a0a0a0;">No posts yet. Create one to get started!</div>';
+      postsList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #a0a0a0;">No posts yet. Create one!</div>';
       return;
     }
 
@@ -302,7 +284,6 @@ async function loadPosts(page = 0) {
       postsList.appendChild(card);
     });
 
-    // Pagination
     createPagination('postsPagination', data.page, Math.ceil(data.totalCount / data.limit), (p) => loadPosts(p));
   } catch (err) {
     console.error('Error loading posts:', err);
@@ -325,12 +306,27 @@ function createPostCard(post) {
   if (post.reactions && post.reactions.length > 0) {
     reactionsHTML = '<div class="reactions">';
     post.reactions.forEach(r => {
-      reactionsHTML += `<div class="reaction-badge">${r.reaction_type} <span class="reaction-count">${r.count}</span></div>`;
+      if (r.count > 0) {
+        reactionsHTML += `<div class="reaction-badge">${r.reaction_type} <span class="reaction-count">${formatNumber(r.count)}</span></div>`;
+      }
     });
     reactionsHTML += '</div>';
   }
 
+  // Add engagement status
+  let statusHTML = '';
+  if (post.engagement) {
+    if (post.engagement.status === 'waiting') {
+      statusHTML = `<div class="engagement-status waiting">⏳ Engagement starts in ${Math.ceil(post.engagement.secondsUntilStart)}s</div>`;
+    } else if (post.engagement.status === 'active') {
+      statusHTML = `<div class="engagement-status active">● Live simulation (${post.engagement.progress}%)</div>`;
+    } else if (post.engagement.status === 'starting') {
+      statusHTML = `<div class="engagement-status starting">● Engagement starting...</div>`;
+    }
+  }
+
   card.innerHTML = `
+    ${statusHTML}
     <div class="post-header">
       <div class="post-avatar">PP</div>
       <div class="post-meta">
@@ -343,7 +339,7 @@ function createPostCard(post) {
     ${reactionsHTML}
     <div class="post-stats">
       <div class="post-stat">👁 <strong>${formatNumber(post.views)}</strong> views</div>
-      <div class="post-stat">💬 <strong>${formatNumber(post.reply_count)}</strong> replies</div>
+      <div class="post-stat">💬 <strong>${formatNumber(post.reply_count || 0)}</strong> replies</div>
       <div class="post-stat">❤️ <strong>${formatNumber(post.reactions?.reduce((sum, r) => sum + r.count, 0) || 0)}</strong> reactions</div>
     </div>
   `;
@@ -396,8 +392,6 @@ function createMemberCard(member) {
   const card = document.createElement('div');
   card.className = 'member-card';
 
-  const initials = member.display_name.split(' ').map(n => n[0]).join('').toUpperCase();
-
   card.innerHTML = `
     <div class="member-avatar">
       <img src="${member.avatar}" alt="${member.display_name}" onerror="this.style.display='none'">
@@ -420,7 +414,6 @@ async function loadAnalytics() {
     const response = await fetch('/api/posts');
     const data = await response.json();
 
-    // For now, show a simple chart
     if (data.posts.length > 0) {
       drawSimpleAnalytics(data.posts);
     }
@@ -430,13 +423,6 @@ async function loadAnalytics() {
 }
 
 function drawSimpleAnalytics(posts) {
-  // Draw views chart
-  const viewsData = posts.slice(0, 10).map((p, i) => ({
-    x: i,
-    y: p.views
-  }));
-
-  // Draw reactions chart
   const reactionCounts = {};
   posts.forEach(post => {
     if (post.reactions) {
@@ -466,7 +452,7 @@ function drawReactionChart(reactionCounts) {
       <div class="reaction-bar-bg">
         <div class="reaction-bar-fill" style="width: ${percentage}%"></div>
       </div>
-      <div class="reaction-count-label">${count}</div>
+      <div class="reaction-count-label">${formatNumber(count)}</div>
     `;
 
     container.appendChild(bar);
@@ -480,11 +466,15 @@ function setupSettings() {
   document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
 
   // Range inputs
-  ['viewProb', 'reactionProb', 'replyProb'].forEach(id => {
+  ['randomness', 'simSpeed'].forEach(id => {
     const input = document.getElementById(id);
     const display = document.getElementById(id + 'Value');
     input.addEventListener('input', (e) => {
-      display.textContent = parseFloat(e.target.value).toFixed(2);
+      if (id === 'simSpeed') {
+        display.textContent = parseFloat(e.target.value).toFixed(1) + 'x';
+      } else {
+        display.textContent = parseFloat(e.target.value).toFixed(1);
+      }
     });
   });
 }
@@ -496,13 +486,15 @@ async function loadSettings() {
 
     document.getElementById('channelName').value = settings.channel_name || '';
     document.getElementById('channelDescription').value = settings.channel_description || '';
-    document.getElementById('viewProb').value = settings.view_probability || 0.45;
-    document.getElementById('viewProbValue').textContent = (settings.view_probability || 0.45).toFixed(2);
-    document.getElementById('reactionProb').value = settings.reaction_probability || 0.25;
-    document.getElementById('reactionProbValue').textContent = (settings.reaction_probability || 0.25).toFixed(2);
-    document.getElementById('replyProb').value = settings.reply_probability || 0.08;
-    document.getElementById('replyProbValue').textContent = (settings.reply_probability || 0.08).toFixed(2);
-    document.getElementById('memberCountInput').value = settings.member_count || 20000;
+    document.getElementById('memberCountInput').value = settings.member_count || 24388;
+    document.getElementById('minViews').value = settings.min_views || 12483;
+    document.getElementById('minReactions').value = settings.min_reactions || 8234;
+    document.getElementById('reactionDelay').value = settings.reaction_delay || 10;
+    document.getElementById('randomness').value = settings.randomness || 0.5;
+    document.getElementById('randomnessValue').textContent = (settings.randomness || 0.5).toFixed(1);
+    document.getElementById('simSpeed').value = settings.simulation_speed || 1;
+    document.getElementById('simSpeedValue').textContent = (settings.simulation_speed || 1).toFixed(1) + 'x';
+    document.getElementById('availableEmojis').value = settings.available_emojis || '❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣';
   } catch (err) {
     console.error('Error loading settings:', err);
   }
@@ -513,9 +505,13 @@ async function saveSettings() {
     const settings = {
       channel_name: document.getElementById('channelName').value,
       channel_description: document.getElementById('channelDescription').value,
-      view_probability: parseFloat(document.getElementById('viewProb').value),
-      reaction_probability: parseFloat(document.getElementById('reactionProb').value),
-      reply_probability: parseFloat(document.getElementById('replyProb').value)
+      member_count: parseInt(document.getElementById('memberCountInput').value),
+      min_views: parseInt(document.getElementById('minViews').value),
+      min_reactions: parseInt(document.getElementById('minReactions').value),
+      reaction_delay: parseInt(document.getElementById('reactionDelay').value),
+      randomness: parseFloat(document.getElementById('randomness').value),
+      simulation_speed: parseFloat(document.getElementById('simSpeed').value),
+      available_emojis: document.getElementById('availableEmojis').value
     };
 
     const response = await fetch('/api/settings', {
@@ -623,14 +619,12 @@ function createPagination(containerId, currentPage, totalPages, callback) {
 
   if (totalPages <= 1) return;
 
-  // Previous button
   const prevBtn = document.createElement('button');
   prevBtn.textContent = '← Previous';
   prevBtn.disabled = currentPage === 0;
   prevBtn.addEventListener('click', () => callback(currentPage - 1));
   container.appendChild(prevBtn);
 
-  // Page buttons
   const startPage = Math.max(0, currentPage - 2);
   const endPage = Math.min(totalPages - 1, currentPage + 2);
 
@@ -670,7 +664,6 @@ function createPagination(containerId, currentPage, totalPages, callback) {
     container.appendChild(lastBtn);
   }
 
-  // Next button
   const nextBtn = document.createElement('button');
   nextBtn.textContent = 'Next →';
   nextBtn.disabled = currentPage === totalPages - 1;
