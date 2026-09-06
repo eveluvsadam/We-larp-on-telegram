@@ -33,7 +33,7 @@ db.serialize(() => {
       min_reactions INTEGER DEFAULT 8234,
       reaction_delay INTEGER DEFAULT 10,
       randomness REAL DEFAULT 0.5,
-      available_emojis TEXT DEFAULT '❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣'
+      available_emojis TEXT DEFAULT '❤️,👍,🔥,😍,💯,😎,😭,🤯,👏,🥶,😈,👀,🙏,⭐,✨,🥰,😘'
     )
   `);
 

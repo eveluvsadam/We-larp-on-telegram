@@ -494,7 +494,7 @@ async function loadSettings() {
     document.getElementById('randomnessValue').textContent = (settings.randomness || 0.5).toFixed(1);
     document.getElementById('simSpeed').value = settings.simulation_speed || 1;
     document.getElementById('simSpeedValue').textContent = (settings.simulation_speed || 1).toFixed(1) + 'x';
-    document.getElementById('availableEmojis').value = settings.available_emojis || '❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣';
+    document.getElementById('availableEmojis').value = settings.available_emojis || '❤️,👍,🔥,😍,💯,😎,😭,🤯,👏,🥶,😈,👀,🙏,⭐,✨,🥰,😘';
   } catch (err) {
     console.error('Error loading settings:', err);
   }

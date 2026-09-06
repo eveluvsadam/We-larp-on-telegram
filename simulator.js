@@ -73,7 +73,7 @@ async function initializePostEngagement(postId) {
     const targetReactions = Math.floor((settings.min_reactions || 8234) * reactRand);
 
     // Select random emojis from available
-    const availableEmojis = (settings.available_emojis || '❤️,👍,🔥,😂,😍,💯,😎,😭,💀,🤯,👏,🥶,😈,👀,🙏,🤣').split(',');
+    const availableEmojis = (settings.available_emojis || '❤️,👍,🔥,😍,💯,😎,😭,🤯,👏,🥶,😈,👀,🙏,⭐,✨,🥰,😘').split(',');
     const numEmojis = 4 + Math.floor(Math.random() * 8); // 4-11 emojis per post
     const selectedEmojis = [];
 
