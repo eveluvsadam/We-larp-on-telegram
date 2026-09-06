@@ -1,11 +1,16 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const dotenv = require('dotenv');
 const { dbRun, dbGet, dbAll } = require('./database');
 const simulator = require('./simulator');
+const telegramBot = require('./telegram-bot');
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -304,6 +309,105 @@ app.post('/api/simulation/reset', async (req, res) => {
   }
 });
 
+// Telegram bot status
+app.get('/api/telegram/status', async (req, res) => {
+  try {
+    const status = await telegramBot.getBotStatus();
+    res.json(status);
+  } catch (err) {
+    console.error('Error getting telegram status:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test Telegram connection
+app.post('/api/telegram/test', async (req, res) => {
+  try {
+    const status = await telegramBot.getBotStatus();
+    res.json({
+      success: status.connected,
+      message: status.connected ? '🟢 Telegram connection working' : '🔴 Telegram connection failed',
+      status
+    });
+  } catch (err) {
+    console.error('Error testing telegram connection:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create test post (without Telegram)
+app.post('/api/test/create-post', async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || text.trim() === '') {
+      return res.status(400).json({ error: 'Post text is required' });
+    }
+
+    const result = await dbRun(
+      'INSERT INTO posts (author_id, text, timestamp, created_at) VALUES (?, ?, ?, ?)',
+      [1, text, new Date().toISOString(), new Date().toISOString()]
+    );
+
+    // Initialize post engagement
+    await simulator.initializePostEngagement(result.id);
+
+    // Start simulation if not already running
+    if (!simulator.isSimulationRunning()) {
+      await simulator.startSimulation();
+    }
+
+    res.json({
+      success: true,
+      postId: result.id,
+      message: 'Test post created. Engagement will start in 10 seconds.'
+    });
+  } catch (err) {
+    console.error('Error creating test post:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get posts with telegram source info
+app.get('/api/posts/with-source', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 0;
+    const limit = 20;
+    const offset = page * limit;
+
+    const posts = await dbAll(
+      `SELECT p.*, tp.telegram_message_id, tp.real_post_text,
+              CASE WHEN tp.id IS NOT NULL THEN 'telegram' ELSE 'local' END as source
+       FROM posts p
+       LEFT JOIN telegram_posts tp ON p.id = tp.local_simulation_id
+       ORDER BY p.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    // Get reactions for each post
+    for (const post of posts) {
+      const reactions = await dbAll(
+        'SELECT reaction_type, count FROM reactions WHERE post_id = ? AND count > 0 ORDER BY count DESC',
+        [post.id]
+      );
+      post.reactions = reactions;
+    }
+
+    const totalCount = await dbGet('SELECT COUNT(*) as count FROM posts');
+
+    res.json({
+      posts,
+      totalCount: totalCount.count,
+      page,
+      limit
+    });
+  } catch (err) {
+    console.error('Error fetching posts with source:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Reseed members
 app.post('/api/simulation/reseed', async (req, res) => {
   try {
@@ -420,7 +524,7 @@ app.post('/api/simulation/reseed', async (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║      🎉 Premmo's Cave Simulator 🎉     ║
@@ -437,6 +541,22 @@ Tips:
 
 Press Ctrl+C to stop the server.
   `);
+
+  // Initialize Telegram bot if configured
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const channelId = process.env.TELEGRAM_CHANNEL_ID;
+
+  if (botToken && channelId) {
+    console.log('\n🤖 Initializing Telegram Bot...');
+    const initialized = await telegramBot.initializeTelegramBot(botToken, parseInt(channelId));
+    if (initialized) {
+      console.log('✅ Telegram bot is listening to your channel');
+    } else {
+      console.log('⚠️  Telegram bot initialization failed. Check your .env configuration.');
+    }
+  } else {
+    console.log('\n⚠️  Telegram bot not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID in .env to enable.');
+  }
 });
 
 // Graceful shutdown
