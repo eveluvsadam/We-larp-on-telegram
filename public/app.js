@@ -12,15 +12,20 @@ function initializeApp() {
   // Set up event listeners
   setupNavigation();
   setupDashboard();
+  setupTelegramBridge();
   setupPosts();
   setupMembers();
   setupSettings();
 
   // Load initial data
   loadStats();
+  checkTelegramStatus();
 
   // Poll stats every 2 seconds
   statsInterval = setInterval(loadStats, 2000);
+
+  // Check Telegram status every 10 seconds
+  setInterval(checkTelegramStatus, 10000);
 }
 
 // Navigation
@@ -72,6 +77,135 @@ function setupDashboard() {
   document.getElementById('speedControl').addEventListener('change', (e) => {
     changeSimulationSpeed(parseFloat(e.target.value));
   });
+}
+
+// Telegram Bridge
+function setupTelegramBridge() {
+  const testTelegramBtn = document.getElementById('testTelegramBtn');
+  const createTestPostBtn = document.getElementById('createTestPostBtn');
+  const submitTestPostBtn = document.getElementById('submitTestPostBtn');
+  const cancelTestPostBtn = document.getElementById('cancelTestPostBtn');
+
+  if (testTelegramBtn) {
+    testTelegramBtn.addEventListener('click', testTelegramConnection);
+  }
+
+  if (createTestPostBtn) {
+    createTestPostBtn.addEventListener('click', () => {
+      document.getElementById('testPostForm').style.display = 'block';
+      document.getElementById('testPostText').focus();
+    });
+  }
+
+  if (submitTestPostBtn) {
+    submitTestPostBtn.addEventListener('click', createTestPost);
+  }
+
+  if (cancelTestPostBtn) {
+    cancelTestPostBtn.addEventListener('click', () => {
+      document.getElementById('testPostForm').style.display = 'none';
+      document.getElementById('testPostText').value = '';
+    });
+  }
+}
+
+async function checkTelegramStatus() {
+  try {
+    const response = await fetch('/api/telegram/status');
+    const status = await response.json();
+
+    const statusIndicator = document.getElementById('telegramStatus');
+    const statusDot = statusIndicator.querySelector('.status-dot');
+    const statusText = statusIndicator.querySelector('.status-text');
+    const infoDiv = document.getElementById('telegramInfo');
+
+    if (status.connected) {
+      statusDot.className = 'status-dot connected';
+      statusText.textContent = `✅ Connected to @${status.botUsername}`;
+      document.getElementById('botUsername').textContent = `@${status.botUsername}`;
+      document.getElementById('channelId').textContent = status.channelId;
+
+      if (status.lastPostDetected) {
+        document.getElementById('lastPostTime').textContent = new Date(status.lastPostDetected.time).toLocaleString();
+      } else {
+        document.getElementById('lastPostTime').textContent = 'Waiting for posts...';
+      }
+
+      infoDiv.style.display = 'block';
+    } else {
+      statusDot.className = 'status-dot error';
+      statusText.textContent = '🔴 Telegram not configured or connection failed';
+      infoDiv.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Error checking Telegram status:', err);
+    const statusIndicator = document.getElementById('telegramStatus');
+    const statusDot = statusIndicator.querySelector('.status-dot');
+    const statusText = statusIndicator.querySelector('.status-text');
+
+    statusDot.className = 'status-dot error';
+    statusText.textContent = '🔴 Error checking Telegram status';
+  }
+}
+
+async function testTelegramConnection() {
+  const btn = document.getElementById('testTelegramBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Testing...';
+  btn.disabled = true;
+
+  try {
+    const response = await fetch('/api/telegram/test', { method: 'POST' });
+    const result = await response.json();
+
+    alert(result.message + '\n\n' + JSON.stringify(result.status, null, 2));
+    checkTelegramStatus();
+  } catch (err) {
+    alert('❌ Test failed: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+async function createTestPost() {
+  const text = document.getElementById('testPostText').value.trim();
+
+  if (!text) {
+    alert('Please enter post text');
+    return;
+  }
+
+  const btn = document.getElementById('submitTestPostBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Creating...';
+  btn.disabled = true;
+
+  try {
+    const response = await fetch('/api/test/create-post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+
+    if (!response.ok) throw new Error('Failed to create post');
+
+    const result = await response.json();
+    alert('✅ Test post created!\n\nPost ID: ' + result.postId + '\n\nEngagement will start in 10 seconds.');
+
+    document.getElementById('testPostForm').style.display = 'none';
+    document.getElementById('testPostText').value = '';
+
+    // Reload posts if on posts page
+    if (currentPage === 'posts') {
+      loadPosts();
+    }
+  } catch (err) {
+    alert('❌ Failed to create post: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 
 async function loadStats() {

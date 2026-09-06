@@ -26,6 +26,7 @@ This simulator is **100% local** and **completely independent** from Telegram:
 - **⚙️ Customizable Settings** - Adjust engagement targets, delays, emoji, member count, simulation speed
 - **💾 Data Persistence** - Everything stored locally in SQLite
 - **🗑️ Reset** - Clear all data and reseed members
+- **🔗 Telegram Bridge** *(Optional)* - Detect posts from your real Telegram channel and create local simulations
 
 ## 🚀 Quick Start
 
@@ -147,6 +148,195 @@ Progress %   Timeline            Description
 - ✅ Responsive design for all screen sizes
 
 **Note:** Server must stay running and device must remain on the same WiFi network.
+
+## 🔗 Telegram Bridge *(Optional)*
+
+The Telegram Bridge is a one-way listener that detects posts from your **real Telegram channel** and creates **local simulations** of engagement. No fake engagement is sent back to Telegram—the integration is read-only.
+
+### Architecture
+
+```
+Your Real Telegram Channel
+           ↓
+      Telegram Bot (your token)
+           ↓
+   Mac mini local service
+           ↓
+   10-second delay
+           ↓
+  Local LARP simulation
+   (24,388 simulated members)
+           ↓
+      Local dashboard
+```
+
+### Critical Safety Notes
+
+✅ **One-way only**: Your Telegram channel → Local simulator
+✅ **No fake engagement**: Simulated data stays local
+✅ **No automation**: Only reads posts you send
+✅ **Your bot**: You create and control it
+✅ **No account automation**: Uses official Telegram Bot API
+
+### Setup Instructions
+
+#### Step 1: Create a Bot with @BotFather
+
+1. **Open Telegram** and search for `@BotFather`
+2. **Send** `/newbot`
+3. **Follow the prompts:**
+   - Choose a name for your bot (e.g., "Premmo's Cave Bot")
+   - Choose a username for your bot (must be unique, must end with "bot", e.g., "premmo_cave_bot")
+4. **Copy your bot token** (looks like: `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
+5. **Save this token** - you'll need it for `.env`
+
+#### Step 2: Get Your Channel ID
+
+1. **Open your Telegram channel**
+2. Go to `@userinfobot` on Telegram
+3. **Forward any message from your channel** to @userinfobot
+4. The bot will reply with your channel ID (negative number, e.g., `-1001234567890`)
+5. **Save this ID** - you'll need it for `.env`
+
+#### Step 3: Add Bot to Your Channel
+
+1. **Go to your Telegram channel**
+2. Click on the **channel name** (at top)
+3. Go to **Subscribers** or **Members**
+4. Click **Add Administrators**
+5. **Search for your bot** (by username)
+6. **Grant minimum permissions:**
+   - ❌ Delete messages
+   - ❌ Ban members
+   - ✅ Can read channel posts (required)
+   - ❌ Other admin features
+
+The bot only needs **read access** to see posts.
+
+#### Step 4: Configure .env
+
+1. **In your project directory**, create a `.env` file:
+
+```bash
+# Copy .env.example
+cp .env.example .env
+
+# Edit .env with your details
+nano .env
+```
+
+2. **Fill in your values:**
+
+```env
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+TELEGRAM_CHANNEL_ID=-1001234567890
+```
+
+3. **Save and close**
+
+#### Step 5: Start the Service
+
+```bash
+npm install
+npm run seed
+npm start
+```
+
+You should see:
+
+```
+🤖 Initializing Telegram Bot...
+✅ Telegram bot connected: @premmo_cave_bot
+✅ Telegram bot is listening to your channel
+```
+
+### How It Works
+
+1. **You send a post** to your real Telegram channel
+2. **Bot detects it** via Telegram Bot API
+3. **Local simulator creates** a simulated post in SQLite
+4. **10-second delay** (configurable)
+5. **Engagement simulation starts:**
+   - Simulated views progress over time
+   - Simulated reactions appear with random emoji
+   - Different emoji distributions per post
+   - Never modifies real Telegram
+
+### Testing
+
+#### Test Connection
+
+1. Go to **Dashboard** in the simulator
+2. Look for **"🔗 Telegram Bridge"** section
+3. Click **"🧪 Test Telegram Connection"**
+4. You should see:
+   - ✅ Bot connected status
+   - Bot username
+   - Channel ID
+   - Last detected post
+
+#### Create Local Test Post
+
+1. In the Telegram Bridge section, click **"📝 Create Test Post"**
+2. Enter some text
+3. Click **"Submit Test Post"**
+4. The simulator will create a post **without needing Telegram**
+5. Watch engagement appear after 10 seconds
+
+### Dashboard Indicators
+
+When viewing posts, you'll see indicators showing the source:
+
+- 🟢 **Real Telegram Post** - Came from your channel
+- 🟣 **Local LARP Post** - Created locally or via test
+
+Both types follow the same engagement simulation.
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Bot not connecting | Check `TELEGRAM_BOT_TOKEN` in .env is correct |
+| No posts detected | Verify bot is admin on channel, send a test post |
+| "Channel not configured" | Make sure `TELEGRAM_CHANNEL_ID` is set in .env |
+| Connection drops | Service auto-reconnects, check internet |
+| Duplicate posts | Tracked by message ID, won't duplicate even if bot updates are replayed |
+
+### Environment Variables
+
+Create a `.env` file with:
+
+```env
+# Required for Telegram Bridge
+TELEGRAM_BOT_TOKEN=your_token_here
+TELEGRAM_CHANNEL_ID=your_channel_id_here
+
+# Optional
+PORT=3000
+DEBUG_TELEGRAM=false
+TELEGRAM_WEBHOOK_URL=  # Leave blank to use polling
+```
+
+**Never commit .env to Git!** It's in `.gitignore` automatically.
+
+### What It Does NOT Do
+
+❌ Create fake members
+❌ Send fake reactions to Telegram
+❌ Modify real Telegram posts
+❌ Add fake subscribers
+❌ Automate real channel activity
+❌ Store Telegram user data
+
+### What It DOES Do
+
+✅ Read posts from your channel
+✅ Create local simulation posts
+✅ Simulate engagement locally
+✅ Track post-to-simulation mapping
+✅ Store bot token safely in `.env`
+✅ Auto-reconnect on disconnection
+✅ Prevent duplicate simulations
 
 ## 📡 API Reference
 

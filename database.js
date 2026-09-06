@@ -128,6 +128,36 @@ db.serialize(() => {
       FOREIGN KEY(post_id) REFERENCES posts(id)
     )
   `);
+
+  // Telegram posts tracking (maps real Telegram posts to local simulations)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS telegram_posts (
+      id INTEGER PRIMARY KEY,
+      telegram_message_id INTEGER UNIQUE,
+      telegram_chat_id INTEGER,
+      real_post_timestamp TEXT,
+      real_post_text TEXT,
+      real_post_media_type TEXT,
+      local_simulation_id INTEGER,
+      created_at TEXT,
+      FOREIGN KEY(local_simulation_id) REFERENCES posts(id)
+    )
+  `);
+
+  // Telegram bot state tracking (for duplicate prevention and reconnection)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS telegram_bot_state (
+      id INTEGER PRIMARY KEY,
+      last_telegram_update_id INTEGER,
+      last_update_time TEXT
+    )
+  `);
+
+  // Initialize bot state if empty
+  db.run(`
+    INSERT OR IGNORE INTO telegram_bot_state (id, last_telegram_update_id, last_update_time)
+    VALUES (1, 0, datetime('now'))
+  `);
 });
 
 // Promisify database methods

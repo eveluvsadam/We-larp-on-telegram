@@ -96,6 +96,35 @@
           <h3>Activity Over 24 Hours</h3>
           <svg id="activityChart" class="activity-chart" viewBox="0 0 1000 300"></svg>
         </div>
+
+        <!-- Telegram Bridge Section -->
+        <div class="telegram-bridge-section">
+          <h3>🔗 Telegram Bridge</h3>
+          <div class="telegram-status">
+            <div id="telegramStatus" class="status-indicator">
+              <span class="status-dot waiting"></span>
+              <span class="status-text">Checking Telegram connection...</span>
+            </div>
+          </div>
+
+          <div class="telegram-controls">
+            <button id="testTelegramBtn" class="btn btn-primary">🧪 Test Telegram Connection</button>
+            <button id="createTestPostBtn" class="btn btn-secondary">📝 Create Test Post</button>
+          </div>
+
+          <div id="telegramInfo" class="telegram-info" style="display:none;">
+            <p><strong>Bot Username:</strong> <span id="botUsername">-</span></p>
+            <p><strong>Channel ID:</strong> <span id="channelId">-</span></p>
+            <p><strong>Last Post Detected:</strong> <span id="lastPostTime">None yet</span></p>
+          </div>
+
+          <div id="testPostForm" class="test-post-form" style="display:none;">
+            <h4>Create Test Local Post</h4>
+            <textarea id="testPostText" placeholder="Enter test post text..." rows="3"></textarea>
+            <button id="submitTestPostBtn" class="btn btn-primary">Submit Test Post</button>
+            <button id="cancelTestPostBtn" class="btn btn-secondary">Cancel</button>
+          </div>
+        </div>
       </section>
 
       <!-- Posts Page -->
