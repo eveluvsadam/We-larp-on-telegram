@@ -36,7 +36,7 @@ async function initializeTelegramBot(token, channel) {
         lastUpdateId = lastUpdate.last_telegram_update_id;
       }
 
-      // Start polling for updates
+      // Start polling for updates (async, don't wait for it)
       startPolling();
       return true;
     } else {
@@ -59,13 +59,23 @@ async function startPolling() {
   // Clear existing interval if any
   if (pollInterval) clearInterval(pollInterval);
 
-  // Poll every 2 seconds
-  pollInterval = setInterval(() => {
-    getUpdates();
-  }, 2000);
+  // Use proper long polling (no interval needed - getUpdates blocks until new data)
+  // Call getUpdates continuously with long timeout
+  pollLongPolling();
+}
 
-  // Get initial updates immediately
-  getUpdates();
+async function pollLongPolling() {
+  if (!botToken || !isConnected) return;
+
+  // This will keep running continuously, with each call waiting up to 30 seconds
+  while (isConnected && botToken) {
+    try {
+      await getUpdates();
+    } catch (err) {
+      // Continue polling even on errors
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
 }
 
 async function getUpdates() {
@@ -74,7 +84,7 @@ async function getUpdates() {
   try {
     const params = {
       allowed_updates: ['channel_post'], // Only listen for channel posts
-      timeout: 1 // Short timeout for polling
+      timeout: 30 // Long polling timeout - server waits up to 30 seconds for new updates
     };
 
     if (lastUpdateId) {
@@ -83,7 +93,9 @@ async function getUpdates() {
 
     const response = await axios.get(
       `https://api.telegram.org/bot${botToken}/getUpdates`,
-      { params }
+      { params,
+        timeout: 35000 // Give axios 35 seconds (timeout + buffer) for the request
+      }
     );
 
     if (response.data.ok && response.data.result.length > 0) {
@@ -102,9 +114,15 @@ async function getUpdates() {
       }
     }
   } catch (err) {
-    if (err.message.includes('ECONNREFUSED') || err.message.includes('timeout')) {
+    // 409 Conflict typically means another client is polling - just retry
+    if (err.response?.status === 409) {
+      console.log('⚠️  Telegram API conflict (409) - another client polling. Retrying...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } else if (err.message.includes('ECONNREFUSED') || err.message.includes('timeout')) {
       // Network error, keep trying
       console.log('⚠️  Telegram connection temporary issue, retrying...');
+    } else if (err.message.includes('ECONNRESET')) {
+      console.log('⚠️  Connection reset by Telegram, retrying...');
     } else {
       console.error('Error polling Telegram updates:', err.message);
     }
@@ -218,11 +236,12 @@ async function getBotStatus() {
 }
 
 async function stopBot() {
+  isConnected = false;
   if (pollInterval) {
     clearInterval(pollInterval);
     pollInterval = null;
-    console.log('⏹️  Telegram bot polling stopped');
   }
+  console.log('⏹️  Telegram bot polling stopped');
 }
 
 module.exports = {
