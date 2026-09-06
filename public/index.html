@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premmo's Cave - Community Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <div class="logo-icon">🎭</div>
+          <h1>premmo's cave</h1>
+        </div>
+        <nav class="nav">
+          <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+          <button class="nav-btn" data-page="posts">Posts</button>
+          <button class="nav-btn" data-page="members">Members</button>
+          <button class="nav-btn" data-page="analytics">Analytics</button>
+          <button class="nav-btn" data-page="settings">Settings</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Dashboard Page -->
+      <section class="page active" id="dashboard-page">
+        <div class="dashboard-header">
+          <h2>Community Dashboard</h2>
+          <div class="simulation-controls">
+            <button id="startBtn" class="btn btn-primary">▶ Start Simulation</button>
+            <button id="stopBtn" class="btn btn-secondary" style="display:none;">⏹ Stop Simulation</button>
+            <select id="speedControl" class="speed-control">
+              <option value="0.5">Slow (0.5x)</option>
+              <option value="1" selected>Normal (1x)</option>
+              <option value="2">Fast (2x)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-content">
+              <div class="stat-label">Total Members</div>
+              <div class="stat-value" id="memberCount">0</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon">🟢</div>
+            <div class="stat-content">
+              <div class="stat-label">Online Now</div>
+              <div class="stat-value" id="onlineCount">0</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon">👁️</div>
+            <div class="stat-content">
+              <div class="stat-label">Total Views</div>
+              <div class="stat-value" id="totalViews">0</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon">❤️</div>
+            <div class="stat-content">
+              <div class="stat-label">Total Reactions</div>
+              <div class="stat-value" id="totalReactions">0</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon">📈</div>
+            <div class="stat-content">
+              <div class="stat-label">Engagement Rate</div>
+              <div class="stat-value" id="engagementRate">0%</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon">✨</div>
+            <div class="stat-content">
+              <div class="stat-label">New Today</div>
+              <div class="stat-value" id="newMembersToday">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <h3>Activity Over 24 Hours</h3>
+          <svg id="activityChart" class="activity-chart" viewBox="0 0 1000 300"></svg>
+        </div>
+      </section>
+
+      <!-- Posts Page -->
+      <section class="page" id="posts-page">
+        <div class="posts-header">
+          <h2>Posts</h2>
+          <button class="btn btn-primary" id="newPostBtn">+ New Post</button>
+        </div>
+
+        <!-- New Post Form (Hidden by default) -->
+        <div class="post-form-container" id="postFormContainer" style="display:none;">
+          <div class="post-form">
+            <h3>Create New Post</h3>
+            <textarea id="postText" placeholder="What's happening in the cave?"></textarea>
+            <input type="text" id="postImage" placeholder="Image URL (optional)">
+            <div class="form-actions">
+              <button class="btn btn-primary" id="submitPostBtn">Post</button>
+              <button class="btn btn-secondary" id="cancelPostBtn">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Posts List -->
+        <div class="posts-list" id="postsList"></div>
+      </section>
+
+      <!-- Members Page -->
+      <section class="page" id="members-page">
+        <div class="members-header">
+          <h2>Members</h2>
+          <input type="text" id="memberSearch" placeholder="Search members...">
+        </div>
+
+        <div class="members-grid" id="membersGrid"></div>
+        <div class="pagination" id="membersPagination"></div>
+      </section>
+
+      <!-- Analytics Page -->
+      <section class="page" id="analytics-page">
+        <h2>Analytics</h2>
+
+        <div class="analytics-grid">
+          <div class="chart-box">
+            <h3>Views Over Time</h3>
+            <svg id="viewsChart" class="chart" viewBox="0 0 600 300"></svg>
+          </div>
+
+          <div class="chart-box">
+            <h3>Online Members Timeline</h3>
+            <svg id="onlineChart" class="chart" viewBox="0 0 600 300"></svg>
+          </div>
+
+          <div class="chart-box">
+            <h3>Member Growth</h3>
+            <svg id="growthChart" class="chart" viewBox="0 0 600 300"></svg>
+          </div>
+
+          <div class="chart-box">
+            <h3>Reaction Distribution</h3>
+            <div id="reactionChart" class="reaction-chart"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Page -->
+      <section class="page" id="settings-page">
+        <div class="settings-container">
+          <h2>Settings & Configuration</h2>
+
+          <div class="settings-section">
+            <h3>Channel Information</h3>
+            <div class="form-group">
+              <label>Channel Name</label>
+              <input type="text" id="channelName" placeholder="Channel name">
+            </div>
+            <div class="form-group">
+              <label>Channel Description</label>
+              <textarea id="channelDescription" placeholder="Channel description"></textarea>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Simulation Parameters</h3>
+            <div class="form-group">
+              <label>View Probability</label>
+              <input type="range" id="viewProb" min="0" max="1" step="0.05" value="0.45">
+              <span id="viewProbValue">0.45</span>
+            </div>
+            <div class="form-group">
+              <label>Reaction Probability</label>
+              <input type="range" id="reactionProb" min="0" max="1" step="0.05" value="0.25">
+              <span id="reactionProbValue">0.25</span>
+            </div>
+            <div class="form-group">
+              <label>Reply Probability</label>
+              <input type="range" id="replyProb" min="0" max="1" step="0.05" value="0.08">
+              <span id="replyProbValue">0.08</span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Member Management</h3>
+            <div class="form-group">
+              <label>Number of Members</label>
+              <input type="number" id="memberCountInput" min="100" max="100000" step="1000" value="20000">
+            </div>
+            <button class="btn btn-primary" id="reseedBtn">🌱 Reseed Members</button>
+            <div id="reseedStatus"></div>
+          </div>
+
+          <div class="settings-section danger">
+            <h3>Danger Zone</h3>
+            <button class="btn btn-danger" id="resetBtn">🗑️ Reset All Simulation Data</button>
+          </div>
+
+          <div class="settings-section">
+            <button class="btn btn-primary" id="saveSettingsBtn">💾 Save Settings</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
