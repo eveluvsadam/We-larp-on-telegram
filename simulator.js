@@ -146,6 +146,15 @@ async function updatePostEngagement(postId) {
           'UPDATE post_engagement SET engagement_started_at = ? WHERE post_id = ?',
           [new Date().toISOString(), postId]
         );
+
+        // If this is a Telegram post, add initial reactions
+        const telegramPost = await dbGet(
+          'SELECT * FROM telegram_posts WHERE local_simulation_id = ?',
+          [postId]
+        );
+        if (telegramPost) {
+          await addReactionsToTelegramPost(postId, telegramPost, engagement);
+        }
       } else {
         return; // Still in delay period
       }
@@ -184,6 +193,32 @@ async function updatePostEngagement(postId) {
     }
   } catch (err) {
     console.error('Error updating post engagement:', err);
+  }
+}
+
+// Add reactions to a real Telegram post
+async function addReactionsToTelegramPost(postId, telegramPost, engagement) {
+  try {
+    const telegramBot = require('./telegram-bot');
+    const emojis = engagement.selected_emojis.split(',');
+
+    // Add each emoji as a reaction to the real Telegram message
+    for (const emoji of emojis) {
+      const success = await telegramBot.addReactionToTelegramMessage(
+        telegramPost.telegram_chat_id,
+        telegramPost.telegram_message_id,
+        emoji.trim()
+      );
+
+      if (success) {
+        console.log(`✅ Added reaction ${emoji} to Telegram message ${telegramPost.telegram_message_id}`);
+      }
+
+      // Small delay between reactions to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  } catch (err) {
+    console.error('Error adding reactions to Telegram post:', err);
   }
 }
 

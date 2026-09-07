@@ -250,9 +250,32 @@ async function stopBot() {
   console.log('⏹️  Telegram bot polling stopped');
 }
 
+// Add reaction to a Telegram message
+async function addReactionToTelegramMessage(chatId, messageId, emoji) {
+  if (!botToken) return false;
+
+  try {
+    const response = await axios.post(
+      `https://api.telegram.org/bot${botToken}/setMessageReaction`,
+      {
+        chat_id: chatId,
+        message_id: messageId,
+        reaction: [{ type: 'emoji', emoji: emoji }],
+        is_big: false
+      }
+    );
+
+    return response.data.ok;
+  } catch (err) {
+    console.error(`Error adding reaction to Telegram message: ${err.message}`);
+    return false;
+  }
+}
+
 module.exports = {
   initializeTelegramBot,
   getBotStatus,
   stopBot,
-  handleChannelPost
+  handleChannelPost,
+  addReactionToTelegramMessage
 };
