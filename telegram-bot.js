@@ -250,16 +250,39 @@ async function stopBot() {
   console.log('⏹️  Telegram bot polling stopped');
 }
 
+// Telegram only accepts a fixed set of emojis for message reactions (setMessageReaction).
+// Any emoji outside this list gets rejected with a 400 "REACTION_INVALID" error, which
+// aborts the WHOLE batch. So we filter our reaction set down to this whitelist before
+// sending to the real channel. (The local dashboard still uses the full emoji set.)
+const TELEGRAM_VALID_REACTION_EMOJIS = new Set([
+  '👍', '👎', '❤', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '😢', '🎉', '🤩',
+  '🤮', '💩', '🙏', '👌', '🕊', '🤡', '🥱', '🥴', '😍', '🐳', '❤‍🔥', '🌚', '🌭', '💯', '🤣',
+  '⚡', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻',
+  '👨‍💻', '👀', '🎃', '🙈', '😇', '😨', '🤝', '✍', '🤗', '🫡', '🎅', '🎄', '☃', '💅', '🤪',
+  '🗿', '🆒', '💘', '🙉', '🦄', '😘', '💊', '🙊', '😎', '👾', '🤷‍♂', '🤷', '🤷‍♀', '😡'
+]);
+
 // Add multiple reactions to a Telegram message
 async function addReactionsToTelegramMessage(chatId, messageId, emojis) {
   if (!botToken) return false;
 
+  // Filter to only emojis Telegram actually accepts as reactions
+  let validEmojis = emojis
+    .map(e => e.trim())
+    .filter(e => TELEGRAM_VALID_REACTION_EMOJIS.has(e));
+
+  // Telegram also caps how many distinct reactions a single message can carry
+  // (default chats allow up to 11); trim to be safe.
+  validEmojis = validEmojis.slice(0, 11);
+
+  if (validEmojis.length === 0) {
+    // Nothing in our selection was valid - fall back to a safe default so the
+    // post still gets *some* visible reaction instead of silently failing.
+    validEmojis = ['👍'];
+  }
+
   try {
-    // Build reaction array with all emojis at once
-    const reactions = emojis.map(emoji => ({
-      type: 'emoji',
-      emoji: emoji.trim()
-    }));
+    const reactions = validEmojis.map(emoji => ({ type: 'emoji', emoji }));
 
     const response = await axios.post(
       `https://api.telegram.org/bot${botToken}/setMessageReaction`,
@@ -273,7 +296,10 @@ async function addReactionsToTelegramMessage(chatId, messageId, emojis) {
 
     return response.data.ok;
   } catch (err) {
-    console.error(`Error adding reactions to Telegram message: ${err.message}`);
+    // Log Telegram's actual error description (e.g. "Bad Request: REACTION_INVALID")
+    // instead of just the generic axios status message.
+    const description = err.response?.data?.description || err.message;
+    console.error(`Error adding reactions to Telegram message: ${description}`);
     return false;
   }
 }
