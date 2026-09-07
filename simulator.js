@@ -200,22 +200,18 @@ async function updatePostEngagement(postId) {
 async function addReactionsToTelegramPost(postId, telegramPost, engagement) {
   try {
     const telegramBot = require('./telegram-bot');
-    const emojis = engagement.selected_emojis.split(',');
+    const emojis = engagement.selected_emojis.split(',').map(e => e.trim());
 
-    // Add each emoji as a reaction to the real Telegram message
-    for (const emoji of emojis) {
-      const success = await telegramBot.addReactionToTelegramMessage(
-        telegramPost.telegram_chat_id,
-        telegramPost.telegram_message_id,
-        emoji.trim()
-      );
+    // Add all emojis as reactions to the real Telegram message at once
+    const success = await telegramBot.addReactionsToTelegramMessage(
+      telegramPost.telegram_chat_id,
+      telegramPost.telegram_message_id,
+      emojis
+    );
 
-      if (success) {
-        console.log(`✅ Added reaction ${emoji} to Telegram message ${telegramPost.telegram_message_id}`);
-      }
-
-      // Small delay between reactions to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 300));
+    if (success) {
+      console.log(`✅ Added ${emojis.length} reactions to Telegram message ${telegramPost.telegram_message_id}`);
+      console.log(`   Emojis: ${emojis.join(' ')}`);
     }
   } catch (err) {
     console.error('Error adding reactions to Telegram post:', err);

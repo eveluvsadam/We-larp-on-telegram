@@ -250,24 +250,30 @@ async function stopBot() {
   console.log('⏹️  Telegram bot polling stopped');
 }
 
-// Add reaction to a Telegram message
-async function addReactionToTelegramMessage(chatId, messageId, emoji) {
+// Add multiple reactions to a Telegram message
+async function addReactionsToTelegramMessage(chatId, messageId, emojis) {
   if (!botToken) return false;
 
   try {
+    // Build reaction array with all emojis at once
+    const reactions = emojis.map(emoji => ({
+      type: 'emoji',
+      emoji: emoji.trim()
+    }));
+
     const response = await axios.post(
       `https://api.telegram.org/bot${botToken}/setMessageReaction`,
       {
         chat_id: chatId,
         message_id: messageId,
-        reaction: [{ type: 'emoji', emoji: emoji }],
+        reaction: reactions,
         is_big: false
       }
     );
 
     return response.data.ok;
   } catch (err) {
-    console.error(`Error adding reaction to Telegram message: ${err.message}`);
+    console.error(`Error adding reactions to Telegram message: ${err.message}`);
     return false;
   }
 }
@@ -277,5 +283,5 @@ module.exports = {
   getBotStatus,
   stopBot,
   handleChannelPost,
-  addReactionToTelegramMessage
+  addReactionsToTelegramMessage
 };
