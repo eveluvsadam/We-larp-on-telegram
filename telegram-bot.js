@@ -184,8 +184,14 @@ async function handleChannelPost(update) {
     console.log(`   ⏳ Simulation will start in 10 seconds...`);
 
     // Initialize engagement for this post (10-second delay built in)
-    const { initializePostEngagement } = require('./simulator');
-    await initializePostEngagement(localPostId);
+    const simulator = require('./simulator');
+    await simulator.initializePostEngagement(localPostId);
+
+    // Start simulation if not already running
+    if (!simulator.isSimulationRunning()) {
+      console.log('🚀 Starting simulator for Telegram post...');
+      await simulator.startSimulation();
+    }
   } catch (err) {
     console.error('Error handling channel post:', err.message);
   }
